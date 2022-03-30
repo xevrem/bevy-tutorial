@@ -12,6 +12,7 @@ pub struct PlayerPlugin;
 #[derive(Component, Inspectable)]
 pub struct Player {
     speed: f32,
+    just_moved: bool,
 }
 
 impl Plugin for PlayerPlugin {
@@ -29,9 +30,10 @@ impl Plugin for PlayerPlugin {
     }
 }
 
-fn test_exit_combat(keyboard: Res<Input<KeyCode>>, mut state: ResMut<State<GameState>>) {
+fn test_exit_combat(mut keyboard: ResMut<Input<KeyCode>>, mut state: ResMut<State<GameState>>) {
     if keyboard.just_pressed(KeyCode::Space) {
         state.set(GameState::Overworld).unwrap();
+        keyboard.clear();
     }
 }
 
@@ -70,14 +72,17 @@ fn hide_player(
 }
 
 fn player_encounter_checking(
-    player_query: Query<&Transform, With<Player>>,
+    player_query: Query<(&Player, &Transform)>,
     encounter_query: Query<&Transform, (With<EncounterSpawner>, Without<Player>)>,
     mut state: ResMut<State<GameState>>,
 ) {
-    let player_translation = player_query.single().translation;
-    if encounter_query
-        .iter()
-        .any(|&transform| wall_collision_check(player_translation, transform.translation))
+    let (player, player_transform) = player_query.single();
+    let player_translation = player_transform.translation;
+
+    if player.just_moved
+        && encounter_query
+            .iter()
+            .any(|&transform| wall_collision_check(player_translation, transform.translation))
     {
         println!("Change to combat");
         state
@@ -98,12 +103,14 @@ fn camera_follow(
 }
 
 fn player_movement(
-    mut player_query: Query<(&Player, &mut Transform)>,
+    mut player_query: Query<(&mut Player, &mut Transform)>,
     wall_query: Query<&Transform, (With<TileCollider>, Without<Player>)>,
     keyboard: Res<Input<KeyCode>>,
     time: Res<Time>,
 ) {
-    let (player, mut transform) = player_query.single_mut();
+    let (mut player, mut transform) = player_query.single_mut();
+    player.just_moved = false;
+
     let mut delta_y = 0.0;
     if keyboard.pressed(KeyCode::W) {
         delta_y += time.delta_seconds() * player.speed * TILE_SIZE;
@@ -125,6 +132,9 @@ fn player_movement(
         .iter()
         .any(|&transform| wall_collision_check(target, transform.translation))
     {
+        if delta_x != 0.0 {
+            player.just_moved = true;
+        }
         transform.translation = target;
     }
 
@@ -133,6 +143,9 @@ fn player_movement(
         .iter()
         .any(|&transform| wall_collision_check(target, transform.translation))
     {
+        if delta_y != 0.0 {
+            player.just_moved = true;
+        }
         transform.translation = target;
     }
 }
@@ -144,11 +157,7 @@ fn wall_collision_check(target_player_pos: Vec3, wall_translation: Vec3) -> bool
         wall_translation,
         Vec2::splat(TILE_SIZE),
     );
-
-    if collision.is_some() {
-        return false;
-    }
-    true
+    collision.is_some()
 }
 
 pub fn spawn_player(mut commands: Commands, ascii: Res<AsciiSheet>) {
@@ -162,7 +171,10 @@ pub fn spawn_player(mut commands: Commands, ascii: Res<AsciiSheet>) {
     commands
         .entity(player)
         .insert(Name::new("Player"))
-        .insert(Player { speed: 3.0 });
+        .insert(Player {
+            speed: 3.0,
+            just_moved: false,
+        });
 
     let mut background_sprite = TextureAtlasSprite::new(0);
     background_sprite.color = Color::rgb(0.5, 0.5, 0.5);
