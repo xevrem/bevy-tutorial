@@ -32,6 +32,7 @@ impl Plugin for PlayerPlugin {
 
 fn test_exit_combat(mut keyboard: ResMut<Input<KeyCode>>, mut state: ResMut<State<GameState>>) {
     if keyboard.just_pressed(KeyCode::Space) {
+        println!("Changing to Overworld");
         state.set(GameState::Overworld).unwrap();
         keyboard.clear();
     }

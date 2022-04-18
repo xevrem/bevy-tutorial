@@ -30,7 +30,6 @@ fn main() {
             width: height * RESOLUTION,
             height,
             title: "Bevy Tutorial".to_string(),
-            vsync: true,
             resizable: false,
             ..Default::default()
         })
