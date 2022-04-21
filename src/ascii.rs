@@ -10,7 +10,7 @@ impl Plugin for AsciiPlugin {
     }
 }
 
-pub struct AsciiSheet(Handle<TextureAtlas>);
+pub struct AsciiSheet(pub Handle<TextureAtlas>);
 
 pub fn spawn_ascii_sprite(
     commands: &mut Commands,

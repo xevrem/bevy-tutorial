@@ -3,17 +3,25 @@ use bevy_inspector_egui::Inspectable;
 
 use crate::{
     ascii::{spawn_ascii_sprite, AsciiSheet},
+    fadeout::create_fadeout,
     tilemap::{EncounterSpawner, TileCollider},
-    GameState, TILE_SIZE,
+    GameState, TILE_SIZE, combat::CombatStats,
 };
 
-pub struct PlayerPlugin;
+#[derive(Component, Default, Reflect)]
+#[reflect(Component)]
+pub struct EncounterTracker {
+    timer: Timer,
+}
 
 #[derive(Component, Inspectable)]
 pub struct Player {
     speed: f32,
     just_moved: bool,
+    active: bool,
 }
+
+pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
@@ -21,30 +29,22 @@ impl Plugin for PlayerPlugin {
             .add_system_set(SystemSet::on_exit(GameState::Overworld).with_system(hide_player))
             .add_system_set(
                 SystemSet::on_update(GameState::Overworld)
-                    .with_system(player_encounter_checking.after("movement"))
-                    .with_system(camera_follow.after("movement"))
+                    .with_system(player_encounter_checking.after(player_movement))
+                    .with_system(camera_follow.after(player_movement))
                     .with_system(player_movement.label("movement")),
             )
-            .add_system_set(SystemSet::on_update(GameState::Combat).with_system(test_exit_combat))
             .add_startup_system(spawn_player);
     }
 }
 
-fn test_exit_combat(mut keyboard: ResMut<Input<KeyCode>>, mut state: ResMut<State<GameState>>) {
-    if keyboard.just_pressed(KeyCode::Space) {
-        println!("Changing to Overworld");
-        state.set(GameState::Overworld).unwrap();
-        keyboard.clear();
-    }
-}
-
 fn show_player(
-    mut player_query: Query<&mut Visibility, With<Player>>,
+    mut player_query: Query<(&mut Visibility, &mut Player)>,
     children_query: Query<&Children, With<Player>>,
     mut child_visibility_query: Query<&mut Visibility, Without<Player>>,
 ) {
-    let mut player_vis = player_query.single_mut();
+    let (mut player_vis, mut player) = player_query.single_mut();
     player_vis.is_visible = true;
+    player.active = true;
 
     if let Ok(children) = children_query.get_single() {
         for child in children.iter() {
@@ -73,11 +73,13 @@ fn hide_player(
 }
 
 fn player_encounter_checking(
-    player_query: Query<(&Player, &Transform)>,
+    mut commands: Commands,
+    mut player_query: Query<(&mut Player, &mut EncounterTracker, &Transform)>,
     encounter_query: Query<&Transform, (With<EncounterSpawner>, Without<Player>)>,
-    mut state: ResMut<State<GameState>>,
+    time: Res<Time>,
+    ascii: Res<AsciiSheet>,
 ) {
-    let (player, player_transform) = player_query.single();
+    let (mut player, mut encounter_tracker, player_transform) = player_query.single_mut();
     let player_translation = player_transform.translation;
 
     if player.just_moved
@@ -85,10 +87,13 @@ fn player_encounter_checking(
             .iter()
             .any(|&transform| wall_collision_check(player_translation, transform.translation))
     {
-        println!("Change to combat");
-        state
-            .set(GameState::Combat)
-            .expect("Failed to change states");
+        encounter_tracker.timer.tick(time.delta());
+
+        if encounter_tracker.timer.just_finished() {
+            println!("Change to combat");
+            create_fadeout(&mut commands, GameState::Combat, &ascii);
+            player.active = false;
+        }
     }
 }
 
@@ -112,6 +117,10 @@ fn player_movement(
     let (mut player, mut transform) = player_query.single_mut();
     player.just_moved = false;
 
+    if !player.active {
+        return;
+    }
+
     let mut delta_y = 0.0;
     if keyboard.pressed(KeyCode::W) {
         delta_y += time.delta_seconds() * player.speed * TILE_SIZE;
@@ -122,10 +131,10 @@ fn player_movement(
 
     let mut delta_x = 0.0;
     if keyboard.pressed(KeyCode::A) {
-        delta_x += time.delta_seconds() * player.speed * TILE_SIZE;
+        delta_x -= time.delta_seconds() * player.speed * TILE_SIZE;
     }
     if keyboard.pressed(KeyCode::D) {
-        delta_x -= time.delta_seconds() * player.speed * TILE_SIZE;
+        delta_x += time.delta_seconds() * player.speed * TILE_SIZE;
     }
 
     let target = transform.translation + Vec3::new(delta_x, 0.0, 0.0);
@@ -175,6 +184,16 @@ pub fn spawn_player(mut commands: Commands, ascii: Res<AsciiSheet>) {
         .insert(Player {
             speed: 3.0,
             just_moved: false,
+            active: true,
+        })
+        .insert(CombatStats{
+            health: 10,
+            max_health: 10,
+            attack: 2,
+            defense: 1,
+        })
+        .insert(EncounterTracker {
+            timer: Timer::from_seconds(1.0, true),
         });
 
     let mut background_sprite = TextureAtlasSprite::new(0);
