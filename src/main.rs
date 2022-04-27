@@ -8,7 +8,7 @@ mod player;
 mod tilemap;
 
 use ascii::AsciiPlugin;
-use combat::{CombatPlugin, FightEvent};
+use combat::CombatPlugin;
 use debug::DebugPlugin;
 use fadeout::FadeoutPlugin;
 use player::PlayerPlugin;
@@ -37,7 +37,6 @@ fn main() {
             resizable: false,
             ..Default::default()
         })
-        .add_event::<FightEvent>()
         .add_startup_system(spawn_camera)
         .add_plugins(DefaultPlugins)
         .add_plugin(PlayerPlugin)

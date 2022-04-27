@@ -177,6 +177,7 @@ pub fn spawn_player(mut commands: Commands, ascii: Res<AsciiSheet>) {
         1,
         Color::rgb(0.3, 0.3, 0.9),
         Vec3::new(2.0 * TILE_SIZE, -2.0 * TILE_SIZE, 900.0),
+        Vec3::splat(1.0)
     );
     commands
         .entity(player)
@@ -206,6 +207,7 @@ pub fn spawn_player(mut commands: Commands, ascii: Res<AsciiSheet>) {
         0,
         Color::rgb(0.5, 0.5, 0.5),
         Vec3::new(0.0, 0.0, -1.0),
+        Vec3::splat(1.0)
     );
 
     commands.entity(background).insert(Name::new("Background"));

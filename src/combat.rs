@@ -1,9 +1,14 @@
 use bevy::prelude::*;
+use bevy_inspector_egui::Inspectable;
 
 use crate::{
-    ascii::{spawn_ascii_sprite, AsciiSheet},
+    ascii::{
+        spawn_ascii_sprite, spawn_ascii_text, spawn_nine_slice, AsciiSheet, AsciiText, NineSlice,
+        NineSliceIndicies,
+    },
     fadeout::create_fadeout,
-    GameState, player::Player,
+    player::Player,
+    GameState, RESOLUTION, TILE_SIZE,
 };
 
 pub struct FightEvent {
@@ -11,7 +16,13 @@ pub struct FightEvent {
     damage_amount: isize,
 }
 
-#[derive(Component)]
+
+#[derive(PartialEq, Eq)]
+pub struct CombatMenuSelection {
+    selected: CombatMenuOption,
+}
+
+#[derive(Component, Inspectable)]
 pub struct CombatStats {
     pub health: isize,
     pub max_health: isize,
@@ -22,30 +33,134 @@ pub struct CombatStats {
 #[derive(Component)]
 pub struct Enemy;
 
+#[derive(Component, PartialEq, Eq)]
+pub enum CombatMenuOption {
+    Fight,
+    Run,
+}
+
 pub struct CombatPlugin;
 
 impl Plugin for CombatPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system_set(
-            SystemSet::on_update(GameState::Combat)
-                .with_system(test_exit_combat)
-                .with_system(combat_input)
-                .with_system(damage_calculation),
-        )
-        .add_system_set(SystemSet::on_enter(GameState::Combat).with_system(spawn_enemy))
-        .add_system_set(SystemSet::on_enter(GameState::Combat).with_system(combat_camera))
-        .add_system_set(SystemSet::on_exit(GameState::Combat).with_system(despawn_enemy));
+        app.add_event::<FightEvent>()
+            .insert_resource(CombatMenuSelection {
+                selected: CombatMenuOption::Fight,
+            })
+            .add_system_set(
+                SystemSet::on_update(GameState::Combat)
+                    .with_system(test_exit_combat)
+                    .with_system(combat_input)
+                    .with_system(damage_calculation)
+                    .with_system(combat_camera)
+                    .with_system(highlight_combat_buttons),
+            )
+            .add_system_set(
+                SystemSet::on_enter(GameState::Combat)
+                    .with_system(spawn_enemy)
+                    .with_system(spawn_combat_menu),
+            )
+            .add_system_set(SystemSet::on_exit(GameState::Combat).with_system(despawn_enemy));
     }
+}
+
+fn highlight_combat_buttons(
+    menu_state: Res<CombatMenuSelection>,
+    button_query: Query<(&Children, &CombatMenuOption)>,
+    nine_slice_query: Query<&Children, With<NineSlice>>,
+    mut sprites_query: Query<&mut TextureAtlasSprite>,
+) {
+    // get button children
+    for (button_children, button_id) in button_query.iter() {
+        for button_child in button_children.iter() {
+            // get the nine slice children from each button
+            if let Ok(nine_slice_children) = nine_slice_query.get(*button_child) {
+                for nine_slice_child in nine_slice_children.iter() {
+                    // if the nine slice child is a sprite, color it
+                    if let Ok(mut sprite) = sprites_query.get_mut(*nine_slice_child) {
+                        if menu_state.selected == *button_id {
+                            sprite.color = Color::RED;
+                        } else {
+                            sprite.color = Color::WHITE;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn spawn_combat_button(
+    commands: &mut Commands,
+    ascii: &AsciiSheet,
+    indices: &NineSliceIndicies,
+    translation: Vec3,
+    text: &str,
+    id: CombatMenuOption,
+    size: Vec2,
+) -> Entity {
+    let nine_slice = spawn_nine_slice(commands, ascii, indices, size.x, size.y);
+    let x_offset = (-size.x / 2.0 + 1.5) * TILE_SIZE;
+    let button_text = spawn_ascii_text(commands, ascii, text, Vec3::new(x_offset, 0.0, 0.0));
+    commands
+        .spawn()
+        .insert(Transform {
+            translation,
+            ..default()
+        })
+        .insert(GlobalTransform::default())
+        .insert(Name::new("Button"))
+        .insert(id)
+        .add_child(nine_slice)
+        .add_child(button_text)
+        .id()
+}
+
+fn spawn_combat_menu(
+    mut commands: Commands,
+    ascii: Res<AsciiSheet>,
+    nine_slice_indices: Res<NineSliceIndicies>,
+) {
+    let box_height = 3.0;
+    let box_center_y = -1.0 + box_height * TILE_SIZE / 2.0;
+    let run_text = "Run";
+    let run_width = (run_text.len() + 2) as f32;
+    let run_center_x = RESOLUTION - (run_width * TILE_SIZE) / 2.0;
+
+    spawn_combat_button(
+        &mut commands,
+        &ascii,
+        &nine_slice_indices,
+        Vec3::new(run_center_x, box_center_y, 100.0),
+        run_text,
+        CombatMenuOption::Run,
+        Vec2::new(run_width, box_height),
+    );
+
+    let fight_text = "Fight";
+    let fight_width = (fight_text.len() + 2) as f32;
+    let fight_center_x = RESOLUTION - (run_width * TILE_SIZE) - (fight_width * TILE_SIZE / 2.0);
+
+    spawn_combat_button(
+        &mut commands,
+        &ascii,
+        &nine_slice_indices,
+        Vec3::new(fight_center_x, box_center_y, 100.0),
+        fight_text,
+        CombatMenuOption::Fight,
+        Vec2::new(fight_width, box_height),
+    );
 }
 
 fn damage_calculation(
     mut commands: Commands,
     mut fight_event: EventReader<FightEvent>,
-    mut target_query: Query<&mut CombatStats>,
+    mut target_query: Query<(&Children, &mut CombatStats)>,
     ascii: Res<AsciiSheet>,
+    text_query: Query<&AsciiText>,
 ) {
     for event in fight_event.iter() {
-        let mut target_stats = target_query
+        let (target_children, mut target_stats) = target_query
             .get_mut(event.target)
             .expect("target has no stats");
 
@@ -53,6 +168,21 @@ fn damage_calculation(
             target_stats.health - (event.damage_amount - target_stats.defense),
             0,
         );
+
+        for child in target_children.iter() {
+            if text_query.get(*child).is_ok() {
+                commands.entity(*child).despawn_recursive();
+
+                let new_health = spawn_ascii_text(
+                    &mut commands,
+                    &ascii,
+                    &format!("Health: {}", target_stats.health),
+                    Vec3::new(-4.5 * TILE_SIZE, 2.0 * TILE_SIZE, 100.00),
+                );
+
+                commands.entity(event.target).add_child(new_health);
+            }
+        }
 
         if target_stats.health == 0 {
             create_fadeout(&mut commands, GameState::Overworld, &ascii);
@@ -84,12 +214,22 @@ fn combat_camera(mut camera_query: Query<&mut Transform, With<Camera>>) {
 }
 
 fn spawn_enemy(mut commands: Commands, ascii: Res<AsciiSheet>) {
+    let enemy_health = 3;
+
+    let health_text = spawn_ascii_text(
+        &mut commands,
+        &ascii,
+        &format!("Health: {}", enemy_health),
+        Vec3::new(-4.5 * TILE_SIZE, 2.0 * TILE_SIZE, 100.0),
+    );
+
     let sprite = spawn_ascii_sprite(
         &mut commands,
         &ascii,
         'b' as usize,
         Color::rgb(0.8, 0.8, 0.8),
         Vec3::new(0.0, 0.5, 100.0),
+        Vec3::splat(1.0),
     );
     commands
         .entity(sprite)
@@ -100,7 +240,8 @@ fn spawn_enemy(mut commands: Commands, ascii: Res<AsciiSheet>) {
             attack: 2,
             defense: 1,
         })
-        .insert(Name::new("Bat"));
+        .insert(Name::new("Bat"))
+        .add_child(health_text);
 }
 
 fn despawn_enemy(mut commands: Commands, enemy_query: Query<Entity, With<Enemy>>) {
