@@ -16,8 +16,9 @@ pub struct FightEvent {
     damage_amount: isize,
 }
 
+const MENU_COUNT: isize = 2;
 
-#[derive(PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct CombatMenuSelection {
     selected: CombatMenuOption,
 }
@@ -33,7 +34,7 @@ pub struct CombatStats {
 #[derive(Component)]
 pub struct Enemy;
 
-#[derive(Component, PartialEq, Eq)]
+#[derive(Component, Clone, Copy, PartialEq, Eq)]
 pub enum CombatMenuOption {
     Fight,
     Run,
@@ -195,11 +196,28 @@ fn combat_input(
     mut fight_event: EventWriter<FightEvent>,
     player_query: Query<&CombatStats, With<Player>>,
     enemy_query: Query<Entity, With<Enemy>>,
+    mut menu_state: ResMut<CombatMenuSelection>,
 ) {
-    let enemy = enemy_query.iter().next().unwrap();
-    let player_stats = player_query.single();
+    let mut new_selection = menu_state.selected as isize;
+
+    if keyboard.just_pressed(KeyCode::A) {
+        new_selection -= 1;
+    }
+    if keyboard.just_pressed(KeyCode::D) {
+        new_selection += 1;
+    }
+
+    new_selection = (new_selection + MENU_COUNT) % MENU_COUNT;
+
+    menu_state.selected = match new_selection {
+        0 => CombatMenuOption::Fight,
+        1 => CombatMenuOption::Run,
+        _ => unreachable!("Bad menu selection")
+    };
 
     if keyboard.just_pressed(KeyCode::Return) {
+        let enemy = enemy_query.iter().next().unwrap();
+        let player_stats = player_query.single();
         fight_event.send(FightEvent {
             target: enemy,
             damage_amount: player_stats.attack,
