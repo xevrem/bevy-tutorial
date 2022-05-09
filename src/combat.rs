@@ -14,6 +14,7 @@ use crate::{
 pub struct FightEvent {
     target: Entity,
     damage_amount: isize,
+    next_state: CombatState,
 }
 
 const MENU_COUNT: isize = 2;
@@ -40,17 +41,27 @@ pub enum CombatMenuOption {
     Run,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CombatState {
+    PlayerTurn,
+    EnemyTurn(bool),
+    Exiting,
+}
+
 pub struct CombatPlugin;
 
 impl Plugin for CombatPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<FightEvent>()
+            .add_state(CombatState::PlayerTurn)
             .insert_resource(CombatMenuSelection {
                 selected: CombatMenuOption::Fight,
             })
             .add_system_set(
+                SystemSet::on_update(CombatState::EnemyTurn(false)).with_system(process_enemy_turn),
+            )
+            .add_system_set(
                 SystemSet::on_update(GameState::Combat)
-                    .with_system(test_exit_combat)
                     .with_system(combat_input)
                     .with_system(damage_calculation)
                     .with_system(combat_camera)
@@ -58,10 +69,45 @@ impl Plugin for CombatPlugin {
             )
             .add_system_set(
                 SystemSet::on_enter(GameState::Combat)
+                    .with_system(start_combat)
                     .with_system(spawn_enemy)
                     .with_system(spawn_combat_menu),
             )
-            .add_system_set(SystemSet::on_exit(GameState::Combat).with_system(despawn_enemy));
+            .add_system_set(
+                SystemSet::on_exit(GameState::Combat)
+                    .with_system(despawn_enemy)
+                    .with_system(despawn_menu),
+            );
+    }
+}
+
+fn start_combat(mut combat_state: ResMut<State<CombatState>>) {
+    // TODO: speed and turn calculatins
+    // thorw away error if it happens
+    let _ = combat_state.set(CombatState::PlayerTurn);
+}
+
+fn process_enemy_turn(
+    mut fight_event: EventWriter<FightEvent>,
+    mut combat_state: ResMut<State<CombatState>>,
+    enemy_query: Query<&CombatStats, With<Enemy>>,
+    player_query: Query<Entity, With<Player>>,
+) {
+    let player_ent = player_query.single();
+    // TODO: support multiple enemies
+    let enemy_stats = enemy_query.iter().next().unwrap();
+
+    fight_event.send(FightEvent {
+        target: player_ent,
+        damage_amount: enemy_stats.attack,
+        next_state: CombatState::PlayerTurn,
+    });
+    combat_state.set(CombatState::EnemyTurn(true));
+}
+
+fn despawn_menu(mut commands: Commands, button_query: Query<Entity, With<CombatMenuOption>>) {
+    for button in button_query.iter() {
+        commands.entity(button).despawn_recursive();
     }
 }
 
@@ -159,6 +205,7 @@ fn damage_calculation(
     mut target_query: Query<(&Children, &mut CombatStats)>,
     ascii: Res<AsciiSheet>,
     text_query: Query<&AsciiText>,
+    mut combat_state: ResMut<State<CombatState>>,
 ) {
     for event in fight_event.iter() {
         let (target_children, mut target_stats) = target_query
@@ -187,17 +234,27 @@ fn damage_calculation(
 
         if target_stats.health == 0 {
             create_fadeout(&mut commands, GameState::Overworld, &ascii);
+            combat_state.set(CombatState::Exiting);
+        } else {
+            combat_state.set(event.next_state);
         }
     }
 }
 
 fn combat_input(
+    mut commands: Commands,
     keyboard: Res<Input<KeyCode>>,
     mut fight_event: EventWriter<FightEvent>,
     player_query: Query<&CombatStats, With<Player>>,
     enemy_query: Query<Entity, With<Enemy>>,
     mut menu_state: ResMut<CombatMenuSelection>,
+    ascii: Res<AsciiSheet>,
+    combat_state: Res<State<CombatState>>,
 ) {
+    if combat_state.current() != &CombatState::PlayerTurn {
+        return;
+    }
+
     let mut new_selection = menu_state.selected as isize;
 
     if keyboard.just_pressed(KeyCode::A) {
@@ -212,16 +269,24 @@ fn combat_input(
     menu_state.selected = match new_selection {
         0 => CombatMenuOption::Fight,
         1 => CombatMenuOption::Run,
-        _ => unreachable!("Bad menu selection")
+        _ => unreachable!("Bad menu selection"),
     };
 
     if keyboard.just_pressed(KeyCode::Return) {
-        let enemy = enemy_query.iter().next().unwrap();
-        let player_stats = player_query.single();
-        fight_event.send(FightEvent {
-            target: enemy,
-            damage_amount: player_stats.attack,
-        })
+        match menu_state.selected {
+            CombatMenuOption::Fight => {
+                let enemy = enemy_query.iter().next().unwrap();
+                let player_stats = player_query.single();
+                fight_event.send(FightEvent {
+                    target: enemy,
+                    damage_amount: player_stats.attack,
+                    next_state: CombatState::EnemyTurn(false),
+                });
+            }
+            CombatMenuOption::Run => {
+                create_fadeout(&mut commands, GameState::Overworld, &ascii);
+            }
+        }
     }
 }
 
@@ -268,14 +333,14 @@ fn despawn_enemy(mut commands: Commands, enemy_query: Query<Entity, With<Enemy>>
     }
 }
 
-fn test_exit_combat(
-    mut commands: Commands,
-    mut keyboard: ResMut<Input<KeyCode>>,
-    ascii: Res<AsciiSheet>,
-) {
-    if keyboard.just_pressed(KeyCode::Space) {
-        println!("Changing to Overworld");
-        create_fadeout(&mut commands, GameState::Overworld, &ascii);
-        keyboard.clear();
-    }
-}
+// fn test_exit_combat(
+//     mut commands: Commands,
+//     mut keyboard: ResMut<Input<KeyCode>>,
+//     ascii: Res<AsciiSheet>,
+// ) {
+//     if keyboard.just_pressed(KeyCode::Space) {
+//         println!("Changing to Overworld");
+//         create_fadeout(&mut commands, GameState::Overworld, &ascii);
+//         keyboard.clear();
+//     }
+// }
