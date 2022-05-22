@@ -3,8 +3,8 @@ use bevy_inspector_egui::Inspectable;
 
 use crate::{
     ascii::{
-        spawn_ascii_sprite, spawn_ascii_text, spawn_nine_slice, AsciiSheet, AsciiText, NineSlice,
-        NineSliceIndicies,
+        spawn_ascii_sprite, spawn_ascii_text, spawn_nine_slice, AsciiSheet,
+        AsciiText, NineSlice, NineSliceIndicies,
     },
     fadeout::create_fadeout,
     player::Player,
@@ -44,9 +44,21 @@ pub enum CombatMenuOption {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CombatState {
     PlayerTurn,
+    PlayerAttack,
     EnemyTurn(bool),
+    EnemyAttack,
     Exiting,
 }
+
+pub struct AttackEffects {
+    timer: Timer,
+    flash_speed: f32,
+    screen_shake_amount: f32,
+    current_shake: f32,
+}
+
+#[derive(Component)]
+pub struct CombatText;
 
 pub struct CombatPlugin;
 
@@ -54,11 +66,18 @@ impl Plugin for CombatPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<FightEvent>()
             .add_state(CombatState::PlayerTurn)
+            .insert_resource(AttackEffects {
+                timer: Timer::from_seconds(0.7, true),
+                flash_speed: 0.1,
+                screen_shake_amount: 0.1,
+                current_shake: 0.0,
+            })
             .insert_resource(CombatMenuSelection {
                 selected: CombatMenuOption::Fight,
             })
             .add_system_set(
-                SystemSet::on_update(CombatState::EnemyTurn(false)).with_system(process_enemy_turn),
+                SystemSet::on_update(CombatState::EnemyTurn(false))
+                    .with_system(process_enemy_turn),
             )
             .add_system_set(
                 SystemSet::on_update(GameState::Combat)
@@ -77,7 +96,65 @@ impl Plugin for CombatPlugin {
                 SystemSet::on_exit(GameState::Combat)
                     .with_system(despawn_enemy)
                     .with_system(despawn_menu),
+            )
+            .add_system_set(
+                SystemSet::on_update(CombatState::PlayerAttack)
+                    .with_system(handle_attack_effects),
+            )
+            .add_system_set(
+                SystemSet::on_update(CombatState::EnemyAttack)
+                    .with_system(handle_attack_effects),
             );
+    }
+}
+
+fn spawn_player_health(
+    mut commands: Commands,
+    ascii: Res<AsciiSheet>,
+    player_query: Query<(Entity, &CombatStats, &Transform), With<Player>>,
+) {
+    let (player, stats, transform) = player_query.single();
+    let health_text = format!("Health: {}", stats.health);
+    let text = spawn_ascii_text(
+        &mut commands,
+        &ascii,
+        &health_text,
+        Vec3::new(-RESOLUTION + TILE_SIZE, -1.0 + TILE_SIZE, 0.0)
+            - transform.translation,
+    );
+    commands.entity(text).insert(CombatText);
+    commands.entity(player).add_child(text);
+}
+
+fn handle_attack_effects(
+    mut attack_fx: ResMut<AttackEffects>,
+    time: Res<Time>,
+    mut enemy_graphics_query: Query<&mut Visibility, With<Enemy>>,
+    mut state: ResMut<State<CombatState>>,
+) {
+    attack_fx.timer.tick(time.delta());
+    let mut enemy_sprite = enemy_graphics_query.iter_mut().next().unwrap();
+
+    if state.current() == &CombatState::PlayerAttack {
+        if attack_fx.timer.elapsed_secs() % attack_fx.flash_speed
+            > attack_fx.flash_speed / 2.0
+        {
+            enemy_sprite.is_visible = false;
+        } else {
+            enemy_sprite.is_visible = true;
+        }
+    } else {
+        attack_fx.current_shake = attack_fx.screen_shake_amount
+            * f32::sin(attack_fx.timer.percent() * 2.0 * std::f32::consts::PI);
+    }
+
+    if attack_fx.timer.just_finished() {
+        enemy_sprite.is_visible = true;
+        if state.current() == &CombatState::PlayerAttack {
+            state.set(CombatState::EnemyTurn(false)).unwrap();
+        } else {
+            state.set(CombatState::PlayerTurn).unwrap();
+        }
     }
 }
 
@@ -100,12 +177,15 @@ fn process_enemy_turn(
     fight_event.send(FightEvent {
         target: player_ent,
         damage_amount: enemy_stats.attack,
-        next_state: CombatState::PlayerTurn,
+        next_state: CombatState::EnemyAttack,
     });
     combat_state.set(CombatState::EnemyTurn(true));
 }
 
-fn despawn_menu(mut commands: Commands, button_query: Query<Entity, With<CombatMenuOption>>) {
+fn despawn_menu(
+    mut commands: Commands,
+    button_query: Query<Entity, With<CombatMenuOption>>,
+) {
     for button in button_query.iter() {
         commands.entity(button).despawn_recursive();
     }
@@ -121,10 +201,13 @@ fn highlight_combat_buttons(
     for (button_children, button_id) in button_query.iter() {
         for button_child in button_children.iter() {
             // get the nine slice children from each button
-            if let Ok(nine_slice_children) = nine_slice_query.get(*button_child) {
+            if let Ok(nine_slice_children) = nine_slice_query.get(*button_child)
+            {
                 for nine_slice_child in nine_slice_children.iter() {
                     // if the nine slice child is a sprite, color it
-                    if let Ok(mut sprite) = sprites_query.get_mut(*nine_slice_child) {
+                    if let Ok(mut sprite) =
+                        sprites_query.get_mut(*nine_slice_child)
+                    {
                         if menu_state.selected == *button_id {
                             sprite.color = Color::RED;
                         } else {
@@ -148,7 +231,8 @@ fn spawn_combat_button(
 ) -> Entity {
     let nine_slice = spawn_nine_slice(commands, ascii, indices, size.x, size.y);
     let x_offset = (-size.x / 2.0 + 1.5) * TILE_SIZE;
-    let button_text = spawn_ascii_text(commands, ascii, text, Vec3::new(x_offset, 0.0, 0.0));
+    let button_text =
+        spawn_ascii_text(commands, ascii, text, Vec3::new(x_offset, 0.0, 0.0));
     commands
         .spawn()
         .insert(Transform {
@@ -186,7 +270,8 @@ fn spawn_combat_menu(
 
     let fight_text = "Fight";
     let fight_width = (fight_text.len() + 2) as f32;
-    let fight_center_x = RESOLUTION - (run_width * TILE_SIZE) - (fight_width * TILE_SIZE / 2.0);
+    let fight_center_x =
+        RESOLUTION - (run_width * TILE_SIZE) - (fight_width * TILE_SIZE / 2.0);
 
     spawn_combat_button(
         &mut commands,
@@ -280,7 +365,7 @@ fn combat_input(
                 fight_event.send(FightEvent {
                     target: enemy,
                     damage_amount: player_stats.attack,
-                    next_state: CombatState::EnemyTurn(false),
+                    next_state: CombatState::PlayerAttack,
                 });
             }
             CombatMenuOption::Run => {
@@ -290,9 +375,12 @@ fn combat_input(
     }
 }
 
-fn combat_camera(mut camera_query: Query<&mut Transform, With<Camera>>) {
+fn combat_camera(
+    mut camera_query: Query<&mut Transform, With<Camera>>,
+    attack_fx: ResMut<AttackEffects>,
+) {
     let mut camera_transform = camera_query.single_mut();
-    camera_transform.translation.x = 0.0;
+    camera_transform.translation.x = attack_fx.current_shake;
     camera_transform.translation.y = 0.0;
 }
 
@@ -327,7 +415,10 @@ fn spawn_enemy(mut commands: Commands, ascii: Res<AsciiSheet>) {
         .add_child(health_text);
 }
 
-fn despawn_enemy(mut commands: Commands, enemy_query: Query<Entity, With<Enemy>>) {
+fn despawn_enemy(
+    mut commands: Commands,
+    enemy_query: Query<Entity, With<Enemy>>,
+) {
     for entity in enemy_query.iter() {
         commands.entity(entity).despawn_recursive();
     }

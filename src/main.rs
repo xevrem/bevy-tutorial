@@ -1,6 +1,7 @@
 use bevy::{app::AppExit, prelude::*, render::camera::ScalingMode};
 
 mod ascii;
+mod audio;
 mod combat;
 mod debug;
 mod fadeout;
@@ -8,6 +9,7 @@ mod player;
 mod tilemap;
 
 use ascii::AsciiPlugin;
+use audio::GameAudioPlugin;
 use combat::CombatPlugin;
 use debug::DebugPlugin;
 use fadeout::FadeoutPlugin;
@@ -37,14 +39,15 @@ fn main() {
             resizable: false,
             ..Default::default()
         })
-        .add_startup_system(spawn_camera)
         .add_plugins(DefaultPlugins)
-        .add_plugin(PlayerPlugin)
-        .add_plugin(CombatPlugin)
+        .add_startup_system(spawn_camera)
         .add_plugin(AsciiPlugin)
-        .add_plugin(FadeoutPlugin)
-        .add_plugin(TileMapPlugin)
+        .add_plugin(CombatPlugin)
         .add_plugin(DebugPlugin)
+        .add_plugin(FadeoutPlugin)
+        .add_plugin(GameAudioPlugin)
+        .add_plugin(PlayerPlugin)
+        .add_plugin(TileMapPlugin)
         .add_system(check_for_exit)
         .run();
 }
