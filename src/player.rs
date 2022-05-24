@@ -19,6 +19,7 @@ pub struct Player {
     speed: f32,
     just_moved: bool,
     active: bool,
+    pub exp: usize,
 }
 
 pub struct PlayerPlugin;
@@ -186,6 +187,7 @@ pub fn spawn_player(mut commands: Commands, ascii: Res<AsciiSheet>) {
             speed: 3.0,
             just_moved: false,
             active: true,
+            exp: 0,
         })
         .insert(CombatStats{
             health: 10,

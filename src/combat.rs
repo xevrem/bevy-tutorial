@@ -7,6 +7,7 @@ use crate::{
         AsciiText, NineSlice, NineSliceIndicies,
     },
     fadeout::create_fadeout,
+    graphics::{spawn_bat_sprite, CharacterSheet},
     player::Player,
     GameState, RESOLUTION, TILE_SIZE,
 };
@@ -47,6 +48,7 @@ pub enum CombatState {
     PlayerAttack,
     EnemyTurn(bool),
     EnemyAttack,
+    Reward,
     Exiting,
 }
 
@@ -82,19 +84,21 @@ impl Plugin for CombatPlugin {
             .add_system_set(
                 SystemSet::on_update(GameState::Combat)
                     .with_system(combat_input)
-                    .with_system(damage_calculation)
+                    .with_system(combat_damage_calc)
                     .with_system(combat_camera)
                     .with_system(highlight_combat_buttons),
             )
             .add_system_set(
                 SystemSet::on_enter(GameState::Combat)
                     .with_system(start_combat)
+                    .with_system(spawn_player_health)
                     .with_system(spawn_enemy)
                     .with_system(spawn_combat_menu),
             )
             .add_system_set(
                 SystemSet::on_exit(GameState::Combat)
                     .with_system(despawn_enemy)
+                    .with_system(despawn_all_combat_text)
                     .with_system(despawn_menu),
             )
             .add_system_set(
@@ -102,9 +106,54 @@ impl Plugin for CombatPlugin {
                     .with_system(handle_attack_effects),
             )
             .add_system_set(
+                SystemSet::on_enter(CombatState::Reward)
+                    .with_system(give_reward),
+            )
+            .add_system_set(
+                SystemSet::on_update(CombatState::Reward)
+                    .with_system(handle_accepting_reward),
+            )
+            .add_system_set(
                 SystemSet::on_update(CombatState::EnemyAttack)
                     .with_system(handle_attack_effects),
             );
+    }
+}
+
+fn handle_accepting_reward(
+    mut commands: Commands,
+    ascii: Res<AsciiSheet>,
+    keyboard: Res<Input<KeyCode>>,
+) {
+    if keyboard.just_pressed(KeyCode::Space) {
+        create_fadeout(&mut commands, GameState::Overworld, &ascii);
+    }
+}
+
+fn give_reward(
+    mut commands: Commands,
+    ascii: Res<AsciiSheet>,
+    mut player_query: Query<&mut Player>,
+) {
+    // TODO: come based on enemies killed
+    let exp_reward = 10;
+    let reward_text = format!("Earmed: {} exp", exp_reward);
+    let text = spawn_ascii_text(
+        &mut commands,
+        &ascii,
+        &reward_text,
+        Vec3::new(-((reward_text.len() / 2) as f32 * TILE_SIZE), 0.0, 0.0),
+    );
+    commands.entity(text).insert(CombatText);
+    player_query.single_mut().exp += exp_reward;
+}
+
+fn despawn_all_combat_text(
+    mut commands: Commands,
+    text_query: Query<Entity, With<CombatText>>,
+) {
+    for entity in text_query.iter() {
+        commands.entity(entity).despawn_recursive();
     }
 }
 
@@ -284,42 +333,42 @@ fn spawn_combat_menu(
     );
 }
 
-fn damage_calculation(
+fn combat_damage_calc(
     mut commands: Commands,
     mut fight_event: EventReader<FightEvent>,
     mut target_query: Query<(&Children, &mut CombatStats)>,
     ascii: Res<AsciiSheet>,
-    text_query: Query<&AsciiText>,
+    text_query: Query<&Transform, With<CombatText>>,
     mut combat_state: ResMut<State<CombatState>>,
 ) {
-    for event in fight_event.iter() {
-        let (target_children, mut target_stats) = target_query
+    if let Some(event) = fight_event.iter().next() {
+        let (target_children, mut stats) = target_query
             .get_mut(event.target)
             .expect("target has no stats");
 
-        target_stats.health = std::cmp::max(
-            target_stats.health - (event.damage_amount - target_stats.defense),
+        stats.health = std::cmp::max(
+            stats.health - (event.damage_amount - stats.defense),
             0,
         );
 
         for child in target_children.iter() {
-            if text_query.get(*child).is_ok() {
+            if let Ok(transform) = text_query.get(*child) {
                 commands.entity(*child).despawn_recursive();
 
                 let new_health = spawn_ascii_text(
                     &mut commands,
                     &ascii,
-                    &format!("Health: {}", target_stats.health),
-                    Vec3::new(-4.5 * TILE_SIZE, 2.0 * TILE_SIZE, 100.00),
+                    &format!("Health: {}", stats.health),
+                    transform.translation,
                 );
-
+                commands.entity(new_health).insert(CombatText);
                 commands.entity(event.target).add_child(new_health);
             }
         }
 
-        if target_stats.health == 0 {
-            create_fadeout(&mut commands, GameState::Overworld, &ascii);
-            combat_state.set(CombatState::Exiting);
+        if stats.health == 0 {
+            // create_fadeout(&mut commands, GameState::Overworld, &ascii);
+            combat_state.set(CombatState::Reward);
         } else {
             combat_state.set(event.next_state);
         }
@@ -384,23 +433,21 @@ fn combat_camera(
     camera_transform.translation.y = 0.0;
 }
 
-fn spawn_enemy(mut commands: Commands, ascii: Res<AsciiSheet>) {
+fn spawn_enemy(mut commands: Commands, ascii: Res<AsciiSheet>, characters: Res<CharacterSheet>) {
     let enemy_health = 3;
 
     let health_text = spawn_ascii_text(
         &mut commands,
         &ascii,
         &format!("Health: {}", enemy_health),
-        Vec3::new(-4.5 * TILE_SIZE, 2.0 * TILE_SIZE, 100.0),
+        Vec3::new(-4.5 * TILE_SIZE, 3.0 * TILE_SIZE, 100.0),
     );
+    commands.entity(health_text).insert(CombatText);
 
-    let sprite = spawn_ascii_sprite(
+    let sprite = spawn_bat_sprite(
         &mut commands,
-        &ascii,
-        'b' as usize,
-        Color::rgb(0.8, 0.8, 0.8),
+        &characters,
         Vec3::new(0.0, 0.5, 100.0),
-        Vec3::splat(1.0),
     );
     commands
         .entity(sprite)
@@ -423,15 +470,3 @@ fn despawn_enemy(
         commands.entity(entity).despawn_recursive();
     }
 }
-
-// fn test_exit_combat(
-//     mut commands: Commands,
-//     mut keyboard: ResMut<Input<KeyCode>>,
-//     ascii: Res<AsciiSheet>,
-// ) {
-//     if keyboard.just_pressed(KeyCode::Space) {
-//         println!("Changing to Overworld");
-//         create_fadeout(&mut commands, GameState::Overworld, &ascii);
-//         keyboard.clear();
-//     }
-// }

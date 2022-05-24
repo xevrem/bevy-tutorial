@@ -2,7 +2,10 @@ use bevy::asset::AssetServer;
 use bevy::prelude::*;
 use bevy_kira_audio::{Audio, AudioChannel, AudioPlugin, AudioSource};
 
-use crate::{combat::FightEvent, GameState};
+use crate::{
+    combat::{CombatState, FightEvent},
+    GameState,
+};
 
 pub struct AudioState {
     bgm_handle: Handle<AudioSource>,
@@ -32,10 +35,27 @@ impl Plugin for GameAudioPlugin {
                     .with_system(play_hit_sfx),
             )
             .add_system_set(
+                SystemSet::on_enter(CombatState::Reward)
+                    .with_system(play_reward_sfx),
+            )
+            .add_system_set(
                 SystemSet::on_enter(GameState::Overworld)
                     .with_system(resume_bgm_music),
-            );
-            // .add_system(volume_control);
+            )
+            .add_system(volume_control);
+    }
+}
+
+fn play_reward_sfx(
+    audio: Res<Audio>,
+    audio_state: Res<AudioState>,
+    mut fight_event: EventReader<FightEvent>,
+) {
+    if fight_event.iter().count() > 0 {
+        audio.play_in_channel(
+            audio_state.reward_handle.clone(),
+            &audio_state.sfx_channel,
+        );
     }
 }
 

@@ -7,6 +7,7 @@ mod debug;
 mod fadeout;
 mod player;
 mod tilemap;
+mod graphics;
 
 use ascii::AsciiPlugin;
 use audio::GameAudioPlugin;
@@ -15,6 +16,7 @@ use debug::DebugPlugin;
 use fadeout::FadeoutPlugin;
 use player::PlayerPlugin;
 use tilemap::TileMapPlugin;
+use graphics::GraphicsPlugin;
 
 pub const CLEAR: Color = Color::rgb(0.1, 0.1, 0.1);
 pub const RESOLUTION: f32 = 16.0 / 9.0;
@@ -48,6 +50,7 @@ fn main() {
         .add_plugin(GameAudioPlugin)
         .add_plugin(PlayerPlugin)
         .add_plugin(TileMapPlugin)
+        .add_plugin(GraphicsPlugin)
         .add_system(check_for_exit)
         .run();
 }
