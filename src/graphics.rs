@@ -48,15 +48,19 @@ impl GraphicsPlugin {
         });
     }
 
-    fn frame_animation (
-        mut sprites_query: Query<(&mut TextureAtlasSprite, &mut FrameAnimation)>,
-        time: Res<Time>
+    fn frame_animation(
+        mut sprites_query: Query<(
+            &mut TextureAtlasSprite,
+            &mut FrameAnimation,
+        )>,
+        time: Res<Time>,
     ) {
         for (mut sprite, mut animation) in sprites_query.iter_mut() {
             animation.timer.tick(time.delta());
 
             if animation.timer.just_finished() {
-                animation.current_frame = (animation.current_frame + 1) % animation.frames.len();
+                animation.current_frame =
+                    (animation.current_frame + 1) % animation.frames.len();
                 sprite.index = animation.frames[animation.current_frame];
             }
         }
@@ -64,7 +68,7 @@ impl GraphicsPlugin {
 }
 
 pub fn spawn_bat_sprite(
-    mut commands: &mut Commands,
+    commands: &mut Commands,
     characters: &CharacterSheet,
     translation: Vec3,
 ) -> Entity {
@@ -81,7 +85,7 @@ pub fn spawn_bat_sprite(
             },
             ..default()
         })
-        .insert(FrameAnimation{
+        .insert(FrameAnimation {
             timer: Timer::from_seconds(0.2, true),
             frames: characters.bat_frames.to_vec(),
             current_frame: 0,

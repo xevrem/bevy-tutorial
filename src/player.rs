@@ -3,9 +3,10 @@ use bevy_inspector_egui::Inspectable;
 
 use crate::{
     ascii::{spawn_ascii_sprite, AsciiSheet},
+    combat::CombatStats,
     fadeout::create_fadeout,
     tilemap::{EncounterSpawner, TileCollider},
-    GameState, TILE_SIZE, combat::CombatStats,
+    GameState, TILE_SIZE,
 };
 
 #[derive(Component, Default, Reflect)]
@@ -26,15 +27,21 @@ pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system_set(SystemSet::on_enter(GameState::Overworld).with_system(show_player))
-            .add_system_set(SystemSet::on_exit(GameState::Overworld).with_system(hide_player))
-            .add_system_set(
-                SystemSet::on_update(GameState::Overworld)
-                    .with_system(player_encounter_checking.after(player_movement))
-                    .with_system(camera_follow.after(player_movement))
-                    .with_system(player_movement.label("movement")),
-            )
-            .add_startup_system(spawn_player);
+        app.add_system_set(
+            SystemSet::on_resume(GameState::Overworld).with_system(show_player),
+        )
+        .add_system_set(
+            SystemSet::on_pause(GameState::Overworld).with_system(hide_player),
+        )
+        .add_system_set(
+            SystemSet::on_update(GameState::Overworld)
+                .with_system(player_encounter_checking.after(player_movement))
+                .with_system(camera_follow.after(player_movement))
+                .with_system(player_movement.label("movement")),
+        )
+        .add_system_set(
+            SystemSet::on_enter(GameState::Overworld).with_system(spawn_player),
+        );
     }
 }
 
@@ -76,23 +83,27 @@ fn hide_player(
 fn player_encounter_checking(
     mut commands: Commands,
     mut player_query: Query<(&mut Player, &mut EncounterTracker, &Transform)>,
-    encounter_query: Query<&Transform, (With<EncounterSpawner>, Without<Player>)>,
+    encounter_query: Query<
+        &Transform,
+        (With<EncounterSpawner>, Without<Player>),
+    >,
     time: Res<Time>,
     ascii: Res<AsciiSheet>,
 ) {
-    let (mut player, mut encounter_tracker, player_transform) = player_query.single_mut();
+    let (mut player, mut encounter_tracker, player_transform) =
+        player_query.single_mut();
     let player_translation = player_transform.translation;
 
     if player.just_moved
-        && encounter_query
-            .iter()
-            .any(|&transform| wall_collision_check(player_translation, transform.translation))
+        && encounter_query.iter().any(|&transform| {
+            wall_collision_check(player_translation, transform.translation)
+        })
     {
         encounter_tracker.timer.tick(time.delta());
 
         if encounter_tracker.timer.just_finished() {
             println!("Change to combat");
-            create_fadeout(&mut commands, GameState::Combat, &ascii);
+            create_fadeout(&mut commands, Some(GameState::Combat), &ascii);
             player.active = false;
         }
     }
@@ -161,7 +172,10 @@ fn player_movement(
     }
 }
 
-fn wall_collision_check(target_player_pos: Vec3, wall_translation: Vec3) -> bool {
+fn wall_collision_check(
+    target_player_pos: Vec3,
+    wall_translation: Vec3,
+) -> bool {
     let collision = collide(
         target_player_pos,
         Vec2::splat(TILE_SIZE * 0.9),
@@ -178,7 +192,7 @@ pub fn spawn_player(mut commands: Commands, ascii: Res<AsciiSheet>) {
         1,
         Color::rgb(0.3, 0.3, 0.9),
         Vec3::new(2.0 * TILE_SIZE, -2.0 * TILE_SIZE, 900.0),
-        Vec3::splat(1.0)
+        Vec3::splat(1.0),
     );
     commands
         .entity(player)
@@ -189,7 +203,7 @@ pub fn spawn_player(mut commands: Commands, ascii: Res<AsciiSheet>) {
             active: true,
             exp: 0,
         })
-        .insert(CombatStats{
+        .insert(CombatStats {
             health: 10,
             max_health: 10,
             attack: 2,
@@ -209,7 +223,7 @@ pub fn spawn_player(mut commands: Commands, ascii: Res<AsciiSheet>) {
         0,
         Color::rgb(0.5, 0.5, 0.5),
         Vec3::new(0.0, 0.0, -1.0),
-        Vec3::splat(1.0)
+        Vec3::splat(1.0),
     );
 
     commands.entity(background).insert(Name::new("Background"));
