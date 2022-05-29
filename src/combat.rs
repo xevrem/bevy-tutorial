@@ -9,7 +9,7 @@ use crate::{
     fadeout::create_fadeout,
     graphics::{spawn_bat_sprite, CharacterSheet},
     player::Player,
-    GameState, RESOLUTION, TILE_SIZE,
+    GameState, MainCamera, RESOLUTION, TILE_SIZE,
 };
 
 pub struct FightEvent {
@@ -137,7 +137,7 @@ fn give_reward(
     ascii: Res<AsciiSheet>,
     mut player_query: Query<&mut Player>,
 ) {
-    // TODO: come based on enemies killed
+    // TODO: based on enemies killed
     let exp_reward = 10;
     let reward_text = format!("Earmed: {} exp", exp_reward);
     let text = spawn_ascii_text(
@@ -427,7 +427,7 @@ fn combat_input(
 }
 
 fn combat_camera(
-    mut camera_query: Query<&mut Transform, With<Camera>>,
+    mut camera_query: Query<&mut Transform, With<MainCamera>>,
     attack_fx: ResMut<AttackEffects>,
 ) {
     let mut camera_transform = camera_query.single_mut();
@@ -435,7 +435,11 @@ fn combat_camera(
     camera_transform.translation.y = 0.0;
 }
 
-fn spawn_enemy(mut commands: Commands, ascii: Res<AsciiSheet>, characters: Res<CharacterSheet>) {
+fn spawn_enemy(
+    mut commands: Commands,
+    ascii: Res<AsciiSheet>,
+    characters: Res<CharacterSheet>,
+) {
     let enemy_health = 3;
 
     let health_text = spawn_ascii_text(

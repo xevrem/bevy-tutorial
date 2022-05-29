@@ -52,9 +52,9 @@ fn fadeout(
 
         if fade.timer.percent() > 0.5 && !fade.sent {
             if let Some(next_state) = fade.next_state {
-                state.set(next_state).unwrap();
-            } else{
-                state.pop().unwrap();
+                state.push(next_state);
+            } else {
+                state.pop();
             }
             fade.sent = true;
         }
