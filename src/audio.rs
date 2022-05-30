@@ -25,7 +25,10 @@ impl Plugin for GameAudioPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugin(AudioPlugin)
             .add_startup_system_to_stage(StartupStage::PreStartup, load_audio)
-            .add_startup_system(start_bgm_music)
+            .add_system_set(
+                SystemSet::on_enter(GameState::Overworld)
+                    .with_system(start_bgm_music)
+            )
             .add_system_set(
                 SystemSet::on_enter(GameState::Combat)
                     .with_system(start_combat_music),
@@ -39,7 +42,7 @@ impl Plugin for GameAudioPlugin {
                     .with_system(play_reward_sfx),
             )
             .add_system_set(
-                SystemSet::on_enter(GameState::Overworld)
+                SystemSet::on_resume(GameState::Overworld)
                     .with_system(resume_bgm_music),
             )
             .add_system(volume_control);

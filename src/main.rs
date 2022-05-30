@@ -1,24 +1,24 @@
-use bevy::{app::AppExit, prelude::*, render::camera::ScalingMode};
+use bevy::{app::AppExit, prelude::*, render::camera::ScalingMode, winit::WinitSettings};
 
 mod ascii;
 mod audio;
 mod combat;
 mod debug;
 mod fadeout;
-mod player;
-mod tilemap;
 mod graphics;
+mod player;
 mod start_menu;
+mod tilemap;
 
 use ascii::AsciiPlugin;
 use audio::GameAudioPlugin;
 use combat::CombatPlugin;
 use debug::DebugPlugin;
 use fadeout::FadeoutPlugin;
-use player::PlayerPlugin;
-use tilemap::TileMapPlugin;
 use graphics::GraphicsPlugin;
+use player::PlayerPlugin;
 use start_menu::MainMenuPlugin;
+use tilemap::TileMapPlugin;
 
 pub const CLEAR: Color = Color::rgb(0.1, 0.1, 0.1);
 pub const RESOLUTION: f32 = 16.0 / 9.0;
@@ -40,6 +40,7 @@ fn main() {
     App::new()
         .add_state(GameState::StartMenu)
         .insert_resource(ClearColor(CLEAR))
+        .insert_resource(WinitSettings::desktop_app())
         .insert_resource(WindowDescriptor {
             width: height * RESOLUTION,
             height,
@@ -75,7 +76,10 @@ fn spawn_camera(mut commands: Commands) {
     commands.spawn_bundle(camera).insert(MainCamera);
 }
 
-fn check_for_exit(keyboard: Res<Input<KeyCode>>, mut events: EventWriter<AppExit>) {
+fn check_for_exit(
+    keyboard: Res<Input<KeyCode>>,
+    mut events: EventWriter<AppExit>,
+) {
     if keyboard.pressed(KeyCode::LControl) && keyboard.pressed(KeyCode::Q) {
         events.send(AppExit);
     }
