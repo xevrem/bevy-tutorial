@@ -14,8 +14,8 @@ opt-level = 3
 bevy = { version = "0.7", features = [
      "dynamic",
      "bevy_gilrs",
-     "bevy_winit",
      "bevy_ui",
+     "bevy_winit",
      "render",
      "png",
      "hdr",

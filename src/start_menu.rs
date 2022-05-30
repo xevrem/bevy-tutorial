@@ -31,31 +31,31 @@ fn despawn_menu(
     mut commands: Commands,
     button_query: Query<Entity, With<Button>>,
 ) {
-    for entity in button_query.iter {
+    for entity in button_query.iter() {
         commands.entity(entity).despawn_recursive();
     }
 }
 
 fn handle_start_button(
-    commands: &mut Commands,
+    mut commands: Commands,
     mut interaction_query: Query<
         (&Children, &mut ButtonActive, &Interaction),
-        Changed<&Interaction>,
+        Changed<Interaction>
     >,
     mut image_query: Query<&mut UiImage>,
     ui_assets: Res<UiAssets>,
     ascii: Res<AsciiSheet>,
 ) {
-    for (children, mut active, interaction) in interaction_query.iter() {
+    for (children, mut active, interaction) in interaction_query.iter_mut() {
         let child = children.iter().next().unwrap();
-        let mut image = image_query.get_mut(child).unwrap();
+        let mut image = image_query.get_mut(*child).unwrap();
 
         match interaction {
             Interaction::Clicked => {
-                if (active.0) {
+                if active.0 {
                     active.0 = false;
                     image.0 = ui_assets.button_pressed.clone();
-                    create_fadeout(commands, Some(GameState::Overworld), *ascii)
+                    create_fadeout(&mut commands, Some(GameState::Overworld), &ascii)
                 }
             }
             Interaction::Hovered | Interaction::None => {
