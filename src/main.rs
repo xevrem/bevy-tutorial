@@ -9,6 +9,7 @@ mod graphics;
 mod player;
 mod start_menu;
 mod tilemap;
+mod npc;
 
 use ascii::AsciiPlugin;
 use audio::GameAudioPlugin;
@@ -19,6 +20,7 @@ use graphics::GraphicsPlugin;
 use player::PlayerPlugin;
 use start_menu::MainMenuPlugin;
 use tilemap::TileMapPlugin;
+use npc::NpcPlugin;
 
 pub const CLEAR: Color = Color::rgb(0.1, 0.1, 0.1);
 pub const RESOLUTION: f32 = 16.0 / 9.0;
@@ -59,6 +61,7 @@ fn main() {
         .add_plugin(TileMapPlugin)
         .add_plugin(GraphicsPlugin)
         .add_plugin(MainMenuPlugin)
+        .add_plugin(NpcPlugin)
         .add_system(check_for_exit)
         .run();
 }
