@@ -95,7 +95,7 @@ fn create_simple_map(mut commands: Commands, ascii: Res<AsciiSheet>) {
                     commands.entity(tile).insert(EncounterSpawner);
                 }
                 if char == '@' {
-                    commands.entity(tile).insert(Npc::Healer).insert(EncounterSpawner);
+                    commands.entity(tile).insert(Npc::Healer).insert(TileCollider);
                 }
                 tiles.push(tile);
             }

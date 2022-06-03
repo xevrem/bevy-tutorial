@@ -19,7 +19,7 @@ pub struct EncounterTracker {
 pub struct Player {
     speed: f32,
     just_moved: bool,
-    active: bool,
+    pub active: bool,
     pub exp: usize,
 }
 
