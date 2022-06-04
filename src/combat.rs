@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, render::camera::Camera2d};
 use bevy_inspector_egui::Inspectable;
 
 use crate::{
@@ -9,7 +9,7 @@ use crate::{
     fadeout::create_fadeout,
     graphics::{spawn_bat_sprite, CharacterSheet},
     player::Player,
-    GameState, MainCamera, RESOLUTION, TILE_SIZE,
+    GameState, RESOLUTION, TILE_SIZE,
 };
 
 pub struct FightEvent {
@@ -135,10 +135,10 @@ fn handle_accepting_reward(
 fn give_reward(
     mut commands: Commands,
     ascii: Res<AsciiSheet>,
-    mut player_query: Query<&mut Player>,
+    mut player_query: Query<(&mut Player, &mut CombatStats)>,
 ) {
     // TODO: based on enemies killed
-    let exp_reward = 10;
+    let exp_reward = 30;
     let reward_text = format!("Earmed: {} exp", exp_reward);
     let text = spawn_ascii_text(
         &mut commands,
@@ -147,7 +147,21 @@ fn give_reward(
         Vec3::new(-((reward_text.len() / 2) as f32 * TILE_SIZE), 0.0, 0.0),
     );
     commands.entity(text).insert(CombatText);
-    player_query.single_mut().exp += exp_reward;
+    let (mut player, mut stats) = player_query.single_mut();
+    if player.give_exp(exp_reward, &mut stats) {
+        let level_text = "Level up!";
+        let text = spawn_ascii_text(
+            &mut commands,
+            &ascii,
+            level_text,
+            Vec3::new(
+                -((level_text.len() / 2) as f32 * TILE_SIZE),
+                -1.5 * TILE_SIZE,
+                0.0,
+            ),
+        );
+        commands.entity(text).insert(CombatText);
+    };
 }
 
 fn despawn_all_combat_text(
@@ -427,7 +441,7 @@ fn combat_input(
 }
 
 fn combat_camera(
-    mut camera_query: Query<&mut Transform, With<MainCamera>>,
+    mut camera_query: Query<&mut Transform, With<Camera2d>>,
     attack_fx: ResMut<AttackEffects>,
 ) {
     let mut camera_transform = camera_query.single_mut();

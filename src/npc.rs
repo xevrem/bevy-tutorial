@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, render::camera::Camera2d};
 
 use crate::{
     ascii::{
@@ -7,7 +7,7 @@ use crate::{
     },
     combat::CombatStats,
     player::Player,
-    GameState, MainCamera, CLEAR, TILE_SIZE,
+    GameState, CLEAR, TILE_SIZE,
 };
 
 #[derive(Component)]
@@ -24,8 +24,8 @@ impl Plugin for NpcPlugin {
     fn build(&self, app: &mut App) {
         app.add_system_set(
             SystemSet::on_update(GameState::Overworld)
-                .with_system(npc_speech.label("speech"))
-                .with_system(clear_speech.after("speech")),
+                .with_system(npc_speech)
+                .with_system(clear_speech.after(npc_speech)),
         );
     }
 }
@@ -85,7 +85,7 @@ fn spawn_textbox(
 fn npc_speech(
     mut commands: Commands,
     mut player_query: Query<(&mut Player, &mut CombatStats, &Transform)>,
-    camera_query: Query<&Transform, With<MainCamera>>,
+    camera_query: Query<&Transform, With<Camera2d>>,
     npc_query: Query<(&Npc, &Transform)>,
     keyboard: Res<Input<KeyCode>>,
     ascii: Res<AsciiSheet>,

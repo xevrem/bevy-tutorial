@@ -3,15 +3,31 @@ use bevy::prelude::*;
 use crate::TILE_SIZE;
 
 pub struct CharacterSheet {
-    handle: Handle<TextureAtlas>,
-    bat_frames: [usize; 3],
+    pub handle: Handle<TextureAtlas>,
+    pub player_up: [usize; 3],
+    pub player_down: [usize; 3],
+    pub player_left: [usize; 3],
+    pub player_right: [usize; 3],
+    pub bat_frames: [usize; 3],
+}
+
+pub enum FacingDirection {
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
+#[derive(Component)]
+pub struct PlayerGraphics {
+    pub facing: FacingDirection,
 }
 
 #[derive(Component)]
 pub struct FrameAnimation {
-    timer: Timer,
-    frames: Vec<usize>,
-    current_frame: usize,
+    pub timer: Timer,
+    pub frames: Vec<usize>,
+    pub current_frame: usize,
 }
 
 pub struct GraphicsPlugin;
@@ -22,7 +38,8 @@ impl Plugin for GraphicsPlugin {
             StartupStage::PreStartup,
             Self::load_graphics,
         )
-        .add_system(Self::frame_animation);
+        .add_system(Self::frame_animation)
+        .add_system(Self::update_player_graphics);
     }
 }
 
@@ -42,10 +59,33 @@ impl GraphicsPlugin {
         );
         let atlas_handle = texture_atlases.add(atlas);
 
+        let columns: usize = 12;
+
         commands.insert_resource(CharacterSheet {
             handle: atlas_handle,
-            bat_frames: [12 * 4 + 3, 12 * 4 + 4, 12 * 4 + 5],
+            player_up: [columns * 3 + 6, columns * 3 + 7, columns * 3 + 8],
+            player_down: [6, 7, 8],
+            player_left: [columns * 1 + 6, columns * 1 + 7, columns * 1 + 8],
+            player_right: [columns * 2 + 6, columns * 2 + 7, columns * 2 + 8],
+            bat_frames: [columns * 4 + 3, columns * 4 + 4, columns * 4 + 5],
         });
+    }
+
+    fn update_player_graphics(
+        mut sprites_query: Query<
+            (&PlayerGraphics, &mut FrameAnimation),
+            Changed<PlayerGraphics>,
+        >,
+        characters: Res<CharacterSheet>,
+    ) {
+        for (graphics, mut animation) in sprites_query.iter_mut() {
+            animation.frames = match graphics.facing {
+                FacingDirection::Up => characters.player_up.to_vec(),
+                FacingDirection::Down => characters.player_down.to_vec(),
+                FacingDirection::Left => characters.player_left.to_vec(),
+                FacingDirection::Right => characters.player_right.to_vec(),
+            }
+        }
     }
 
     fn frame_animation(
