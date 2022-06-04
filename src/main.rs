@@ -42,7 +42,6 @@ fn main() {
     App::new()
         .add_state(GameState::StartMenu)
         .insert_resource(ClearColor(CLEAR))
-        .insert_resource(WinitSettings::desktop_app())
         .insert_resource(WindowDescriptor {
             width: height * RESOLUTION,
             height,

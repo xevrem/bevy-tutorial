@@ -14,6 +14,7 @@ use crate::{
 pub enum Npc {
     Healer,
 }
+
 #[derive(Component)]
 pub struct NpcText;
 
