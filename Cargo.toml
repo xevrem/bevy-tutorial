@@ -24,6 +24,7 @@ bevy = { version = "0.7", features = [
 ] }
 bevy_kira_audio = {version = "0.9", features = ["ogg", "wav"]}
 bevy-inspector-egui = "0.10.0"
+rand = "*"
 
 # Add the contents of this file to `config.toml` to enable "fast build" configuration. Please read the notes below.
 

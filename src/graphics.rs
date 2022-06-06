@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::TILE_SIZE;
+use crate::{TILE_SIZE, combat::EnemyType};
 
 pub struct CharacterSheet {
     pub handle: Handle<TextureAtlas>,
@@ -9,6 +9,7 @@ pub struct CharacterSheet {
     pub player_left: [usize; 3],
     pub player_right: [usize; 3],
     pub bat_frames: [usize; 3],
+    pub ghost_frames: [usize; 3],
 }
 
 pub enum FacingDirection {
@@ -68,6 +69,7 @@ impl GraphicsPlugin {
             player_left: [columns * 1 + 6, columns * 1 + 7, columns * 1 + 8],
             player_right: [columns * 2 + 6, columns * 2 + 7, columns * 2 + 8],
             bat_frames: [columns * 4 + 3, columns * 4 + 4, columns * 4 + 5],
+            ghost_frames: [columns * 4 + 6, columns * 4 + 7, columns * 4 + 8],
         });
     }
 
@@ -107,13 +109,30 @@ impl GraphicsPlugin {
     }
 }
 
-pub fn spawn_bat_sprite(
+pub fn spawn_enemy_sprite(
     commands: &mut Commands,
     characters: &CharacterSheet,
     translation: Vec3,
+    enemy_type: &EnemyType,
 ) -> Entity {
-    let mut sprite = TextureAtlasSprite::new(characters.bat_frames[0]);
+    let mut sprite = match enemy_type {
+        EnemyType::Bat => TextureAtlasSprite::new(characters.bat_frames[0]),
+        EnemyType::Ghost => TextureAtlasSprite::new(characters.ghost_frames[0]),
+    };
     sprite.custom_size = Some(Vec2::splat(0.5));
+
+    let animation = match enemy_type {
+        EnemyType::Bat => FrameAnimation {
+            timer: Timer::from_seconds(0.2, true),
+            frames: characters.bat_frames.to_vec(),
+            current_frame: 0,
+        },
+        EnemyType::Ghost => FrameAnimation {
+            timer: Timer::from_seconds(0.2, true),
+            frames: characters.ghost_frames.to_vec(),
+            current_frame: 0,
+        },
+    };
 
     commands
         .spawn_bundle(SpriteSheetBundle {
@@ -125,10 +144,6 @@ pub fn spawn_bat_sprite(
             },
             ..default()
         })
-        .insert(FrameAnimation {
-            timer: Timer::from_seconds(0.2, true),
-            frames: characters.bat_frames.to_vec(),
-            current_frame: 0,
-        })
+        .insert(animation)
         .id()
 }

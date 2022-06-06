@@ -3,11 +3,11 @@ use bevy_inspector_egui::Inspectable;
 
 use crate::{
     ascii::{
-        spawn_ascii_sprite, spawn_ascii_text, spawn_nine_slice, AsciiSheet,
-        AsciiText, NineSlice, NineSliceIndicies,
+        spawn_ascii_text, spawn_nine_slice, AsciiSheet, NineSlice,
+        NineSliceIndicies,
     },
     fadeout::create_fadeout,
-    graphics::{spawn_bat_sprite, CharacterSheet},
+    graphics::{spawn_enemy_sprite, CharacterSheet},
     player::Player,
     GameState, RESOLUTION, TILE_SIZE,
 };
@@ -33,8 +33,15 @@ pub struct CombatStats {
     pub defense: isize,
 }
 
+pub enum EnemyType {
+    Bat,
+    Ghost,
+}
+
 #[derive(Component)]
-pub struct Enemy;
+pub struct Enemy {
+    pub enemy_type: EnemyType,
+}
 
 #[derive(Component, Clone, Copy, PartialEq, Eq)]
 pub enum CombatMenuOption {
@@ -136,9 +143,13 @@ fn give_reward(
     mut commands: Commands,
     ascii: Res<AsciiSheet>,
     mut player_query: Query<(&mut Player, &mut CombatStats)>,
+    mut enemy_query: Query<&Enemy>
 ) {
     // TODO: based on enemies killed
-    let exp_reward = 30;
+    let exp_reward = match enemy_query.single().enemy_type {
+        EnemyType::Bat => 10,
+        EnemyType::Ghost => 30,
+    };
     let reward_text = format!("Earmed: {} exp", exp_reward);
     let text = spawn_ascii_text(
         &mut commands,
@@ -454,30 +465,42 @@ fn spawn_enemy(
     ascii: Res<AsciiSheet>,
     characters: Res<CharacterSheet>,
 ) {
-    let enemy_health = 3;
-
-    let health_text = spawn_ascii_text(
-        &mut commands,
-        &ascii,
-        &format!("Health: {}", enemy_health),
-        Vec3::new(-4.5 * TILE_SIZE, 3.0 * TILE_SIZE, 100.0),
-    );
-    commands.entity(health_text).insert(CombatText);
-
-    let sprite = spawn_bat_sprite(
-        &mut commands,
-        &characters,
-        Vec3::new(0.0, 0.5, 100.0),
-    );
-    commands
-        .entity(sprite)
-        .insert(Enemy)
-        .insert(CombatStats {
+    let enemy_type = match rand::random::<f32>() {
+        x if x < 0.5 => EnemyType::Bat,
+        _ => EnemyType::Ghost,
+    };
+    let stats = match enemy_type {
+        EnemyType::Bat => CombatStats{
             health: 3,
             max_health: 3,
             attack: 2,
             defense: 1,
-        })
+        },
+        EnemyType::Ghost => CombatStats{
+            health: 5,
+            max_health: 5,
+            attack: 3,
+            defense: 2,
+        },
+    };
+    let health_text = spawn_ascii_text(
+        &mut commands,
+        &ascii,
+        &format!("Health: {}", stats.health as usize),
+        Vec3::new(-4.5 * TILE_SIZE, 3.0 * TILE_SIZE, 100.0),
+    );
+    commands.entity(health_text).insert(CombatText);
+
+    let sprite = spawn_enemy_sprite(
+        &mut commands,
+        &characters,
+        Vec3::new(0.0, 0.5, 100.0),
+        &enemy_type,
+    );
+    commands
+        .entity(sprite)
+        .insert(Enemy { enemy_type })
+        .insert(stats)
         .insert(Name::new("Bat"))
         .add_child(health_text);
 }

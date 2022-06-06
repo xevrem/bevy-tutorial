@@ -1,4 +1,4 @@
-use bevy::{app::AppExit, prelude::*, render::camera::ScalingMode, winit::WinitSettings};
+use bevy::{app::AppExit, prelude::*, render::camera::ScalingMode};
 
 mod ascii;
 mod audio;
@@ -6,10 +6,10 @@ mod combat;
 mod debug;
 mod fadeout;
 mod graphics;
+mod npc;
 mod player;
 mod start_menu;
 mod tilemap;
-mod npc;
 
 use ascii::AsciiPlugin;
 use audio::GameAudioPlugin;
@@ -17,10 +17,10 @@ use combat::CombatPlugin;
 use debug::DebugPlugin;
 use fadeout::FadeoutPlugin;
 use graphics::GraphicsPlugin;
+use npc::NpcPlugin;
 use player::PlayerPlugin;
 use start_menu::MainMenuPlugin;
 use tilemap::TileMapPlugin;
-use npc::NpcPlugin;
 
 pub const CLEAR: Color = Color::rgb(0.1, 0.1, 0.1);
 pub const RESOLUTION: f32 = 16.0 / 9.0;
